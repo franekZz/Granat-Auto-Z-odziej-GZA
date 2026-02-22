@@ -2,16 +2,20 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>GZA 1GB - Różowa Misja</title>
+    <title>GZA 1GB - Miasto Różu</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; background: #000; }
         #ui {
             position: absolute; top: 20px; left: 20px; color: #ff00ff;
-            text-shadow: 2px 2px #000; pointer-events: none;
+            text-shadow: 2px 2px #000; pointer-events: none; z-index: 10;
+        }
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 0, 0, 0.3); display: none; pointer-events: none; z-index: 5;
         }
         #crosshair {
             position: absolute; top: 50%; left: 50%;
-            width: 10px; height: 10px; border: 2px solid #ff00ff;
+            width: 8px; height: 8px; border: 2px solid #ff00ff;
             border-radius: 50%; transform: translate(-50%, -50%);
         }
         #instructions {
@@ -24,17 +28,18 @@
 </head>
 <body>
 
+    <div id="damage-overlay"></div>
     <div id="ui">
         <div class="stat">HP: <span id="hp">100</span></div>
-        <div class="stat">GZA CITY - DEV BUILD</div>
-        <div style="margin-top: 10px;">LPM: Atak | WSAD: Ruch | M: Menu Cheatów</div>
+        <div id="weapon-info" class="stat">BROŃ: PIĘŚĆ</div>
+        <div style="margin-top: 10px;">[1] PIĘŚĆ | [2] PISTOLET | WSAD: RUCH</div>
     </div>
 
     <div id="crosshair"></div>
 
     <div id="instructions">
-        <h1>GZA 1GB: PINK EDITION</h1>
-        <p>KLIKNIJ, ABY ROZPOCZĄĆ ROZGRYWKĘ</p>
+        <h1>GZA 1GB - MIASTO</h1>
+        <p>KLIKNIJ, ABY WEJŚĆ DO GRY</p>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -46,55 +51,66 @@
         let prevTime = performance.now();
         let npcs = [];
         let playerHP = 100;
+        let currentWeapon = 'fist'; // 'fist' lub 'gun'
 
         init();
         animate();
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x1a001a);
-            scene.fog = new THREE.Fog(0x1a001a, 0, 100);
+            scene.background = new THREE.Color(0x100010);
+            scene.fog = new THREE.Fog(0x100010, 0, 150);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Renderer z optymalizacją pod Twoje GPU
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            // Oświetlenie
-            const light = new THREE.AmbientLight(0x404040, 2); 
+            const light = new THREE.AmbientLight(0xffffff, 0.5); 
             scene.add(light);
-            const sun = new THREE.DirectionalLight(0xff00ff, 1);
-            sun.position.set(10, 20, 10);
-            scene.add(sun);
+            const cityLight = new THREE.PointLight(0xff00ff, 2, 100);
+            cityLight.position.set(0, 20, 0);
+            scene.add(cityLight);
 
-            // Różowa podłoga - siatka miasta
-            const floorGeo = new THREE.PlaneGeometry(1000, 1000, 50, 50);
+            // Podłoga
+            const floorGeo = new THREE.PlaneGeometry(1000, 1000, 100, 100);
             floorGeo.rotateX(-Math.PI / 2);
-            const floorMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+            const floorMat = new THREE.MeshBasicMaterial({ color: 0x330033, wireframe: true });
             scene.add(new THREE.Mesh(floorGeo, floorMat));
 
-            // Ręka / Broń
-            const weaponGeo = new THREE.BoxGeometry(0.3, 0.3, 1);
-            const weaponMat = new THREE.MeshPhongMaterial({ color: 0xff00ff, emissive: 0x330033 });
+            // Budynki
+            const boxGeo = new THREE.BoxGeometry(10, 1, 10);
+            for (let i = 0; i < 60; i++) {
+                const h = Math.random() * 50 + 10;
+                const bGeo = new THREE.BoxGeometry(8, h, 8);
+                const bMat = new THREE.MeshPhongMaterial({ color: 0x220022, emissive: 0x110011 });
+                const b = new THREE.Mesh(bGeo, bMat);
+                b.position.x = (Math.random() - 0.5) * 300;
+                b.position.z = (Math.random() - 0.5) * 300;
+                b.position.y = h / 2;
+                scene.add(b);
+            }
+
+            // Model Broni
+            const weaponGeo = new THREE.BoxGeometry(0.2, 0.2, 0.8);
+            const weaponMat = new THREE.MeshPhongMaterial({ color: 0xff00ff });
             weapon = new THREE.Mesh(weaponGeo, weaponMat);
-            weapon.position.set(0.6, -0.5, -1);
+            weapon.position.set(0.5, -0.4, -0.8);
             camera.add(weapon);
             scene.add(camera);
 
-            // Generator NPC
-            for (let i = 0; i < 15; i++) {
-                createNPC(Math.random() * 80 - 40, Math.random() * 80 - 40);
+            // NPC
+            for (let i = 0; i < 20; i++) {
+                createNPC((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
             }
 
-            // Sterowanie
-            const instructions = document.getElementById('instructions');
-            instructions.addEventListener('click', () => document.body.requestPointerLock());
-
+            // Eventy
+            document.getElementById('instructions').addEventListener('click', () => document.body.requestPointerLock());
+            
             document.addEventListener('pointerlockchange', () => {
-                instructions.style.display = document.pointerLockElement === document.body ? 'none' : 'block';
+                document.getElementById('instructions').style.display = document.pointerLockElement === document.body ? 'none' : 'block';
             });
 
             document.addEventListener('mousemove', (e) => {
@@ -110,6 +126,8 @@
                 if(e.code === 'KeyS') moveBackward = true;
                 if(e.code === 'KeyA') moveLeft = true;
                 if(e.code === 'KeyD') moveRight = true;
+                if(e.code === 'Digit1') { currentWeapon = 'fist'; document.getElementById('weapon-info').innerText = "BROŃ: PIĘŚĆ"; weapon.scale.set(1,1,1); }
+                if(e.code === 'Digit2') { currentWeapon = 'gun'; document.getElementById('weapon-info').innerText = "BROŃ: PISTOLET"; weapon.scale.set(0.5, 0.5, 1.2); }
             });
 
             document.addEventListener('keyup', (e) => {
@@ -119,38 +137,54 @@
                 if(e.code === 'KeyD') moveRight = false;
             });
 
-            // Atak
             window.addEventListener('mousedown', () => {
                 if (document.pointerLockElement !== document.body) return;
                 
-                // Animacja ataku
-                weapon.position.z = -1.5;
-                setTimeout(() => weapon.position.z = -1, 100);
+                // Animacja
+                weapon.position.z = -1.2;
+                setTimeout(() => weapon.position.z = -0.8, 100);
 
-                // Logika trafienia
-                npcs.forEach(npc => {
-                    const dist = camera.position.distanceTo(npc.position);
-                    if (dist < 4) {
-                        npc.userData.hp -= 40;
-                        npc.userData.isAggressive = true;
-                        npc.children[0].material.color.set(0xff0000); // Zły NPC staje się czerwony
-                        if (npc.userData.hp <= 0) npc.rotation.z = Math.PI / 2;
+                // Strzelanie/Bicie
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera({x: 0, y: 0}, camera);
+                const intersects = raycaster.intersectObjects(npcs, true);
+
+                if (intersects.length > 0) {
+                    let target = intersects[0].object.parent;
+                    let dist = intersects[0].distance;
+
+                    if (currentWeapon === 'fist' && dist < 4) {
+                        damageNPC(target, 50);
+                    } else if (currentWeapon === 'gun' && dist < 50) {
+                        damageNPC(target, 35);
+                        showMuzzleFlash(intersects[0].point);
                     }
-                });
+                }
             });
         }
 
         function createNPC(x, z) {
             const group = new THREE.Group();
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(1.2, 2.5, 1.2),
-                new THREE.MeshPhongMaterial({ color: 0x00ff88 })
-            );
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshPhongMaterial({ color: 0x00ff88 }));
             group.add(body);
-            group.position.set(x, 1.25, z);
-            group.userData = { hp: 100, isAggressive: false, lastShot: 0 };
+            group.position.set(x, 1, z);
+            group.userData = { hp: 100, aggro: false, lastShot: 0 };
             scene.add(group);
             npcs.push(group);
+        }
+
+        function damageNPC(npc, amount) {
+            npc.userData.hp -= amount;
+            npc.userData.aggro = true;
+            npc.children[0].material.color.set(0xff0000);
+            if(npc.userData.hp <= 0) npc.rotation.z = Math.PI / 2;
+        }
+
+        function showMuzzleFlash(pos) {
+            const s = new THREE.Mesh(new THREE.SphereGeometry(0.2), new THREE.MeshBasicMaterial({color: 0xff00ff}));
+            s.position.copy(pos);
+            scene.add(s);
+            setTimeout(() => scene.remove(s), 50);
         }
 
         function animate() {
@@ -158,7 +192,6 @@
             const time = performance.now();
             const delta = (time - prevTime) / 1000;
 
-            // Ruch gracza
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
             direction.z = Number(moveForward) - Number(moveBackward);
@@ -170,26 +203,22 @@
 
             camera.translateX(-velocity.x * delta);
             camera.translateZ(velocity.z * delta);
-            camera.position.y = 1.6;
 
-            // Logika NPC
             npcs.forEach(npc => {
-                if (npc.userData.hp > 0 && npc.userData.isAggressive) {
-                    npc.lookAt(camera.position.x, 1.25, camera.position.z);
-                    
-                    // Strzelanie
-                    if (time - npc.userData.lastShot > 1500) {
+                if (npc.userData.hp > 0 && npc.userData.aggro) {
+                    npc.lookAt(camera.position.x, 1, camera.position.z);
+                    if (time - npc.userData.lastShot > 1500 && camera.position.distanceTo(npc.position) < 30) {
+                        // Gracz dostaje hita
                         playerHP -= 10;
                         document.getElementById('hp').innerText = playerHP;
                         
-                        // Błysk strzału
-                        const flash = new THREE.PointLight(0xff0000, 5, 10);
-                        flash.position.copy(npc.position);
-                        scene.add(flash);
-                        setTimeout(() => scene.remove(flash), 100);
+                        // Efekt obrażeń (BŁYSK)
+                        const overlay = document.getElementById('damage-overlay');
+                        overlay.style.display = 'block';
+                        setTimeout(() => overlay.style.display = 'none', 100);
 
                         npc.userData.lastShot = time;
-                        if(playerHP <= 0) alert("GAME OVER! Odśwież stronę.");
+                        if(playerHP <= 0) { alert("ZGINĄŁEŚ!"); location.reload(); }
                     }
                 }
             });
