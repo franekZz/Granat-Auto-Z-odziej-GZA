@@ -2,35 +2,64 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>GZA 1GB - Poprawiona Misja</title>
+    <title>GZA 1GB - Weapon Menu Update</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background: #000; }
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; }
         #ui { position: absolute; top: 20px; left: 20px; color: #ff00ff; text-shadow: 2px 2px #000; pointer-events: none; z-index: 10; }
-        #mission-box { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.8); padding: 15px; border: 2px solid #ff00ff; color: #fff; width: 280px; }
-        #hp-bar-container { width: 200px; height: 10px; border: 1px solid #ff00ff; background: #300030; margin-top: 5px; }
-        #hp-bar-fill { width: 100%; height: 100%; background: #ff00ff; }
-        #speedometer { position: absolute; bottom: 20px; right: 20px; color: #ff00ff; font-size: 20px; font-weight: bold; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; border: 1px solid #ff00ff; border-radius: 50%; transform: translate(-50%, -50%); display: none; }
+        #mission-box { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.85); padding: 15px; border: 2px solid #ff00ff; color: #fff; width: 280px; border-radius: 5px; }
+        #hp-bar-container { width: 200px; height: 12px; border: 1px solid #ff00ff; background: #300030; margin-top: 5px; }
+        #hp-bar-fill { width: 100%; height: 100%; background: #ff00ff; transition: width 0.3s; }
+        
+        /* WEAPON MENU STYLE */
+        #weapon-menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); display: none;
+            justify-content: center; align-items: center; z-index: 200;
+        }
+        .menu-container { display: flex; gap: 20px; }
+        .weapon-slot {
+            width: 150px; height: 150px; background: rgba(255, 0, 255, 0.1);
+            border: 3px solid #ff00ff; color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; cursor: pointer;
+            transition: 0.2s; border-radius: 15px; text-transform: uppercase; font-weight: bold;
+        }
+        .weapon-slot:hover { background: rgba(255, 0, 255, 0.4); transform: scale(1.1); }
+        .locked { opacity: 0.3; cursor: not-allowed; border-color: #555; }
+
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border: 2px solid #00ff00; border-radius: 50%; transform: translate(-50%, -50%); display: none; pointer-events: none; }
         #instructions { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; background: rgba(0,0,0,0.9); z-index: 100; cursor: pointer; }
-        #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); color: white; font-size: 18px; display: none; text-shadow: 2px 2px black; }
+        #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); color: #00ff00; font-size: 20px; display: none; font-weight: bold; text-shadow: 2px 2px black; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <div style="font-weight: bold;">GZA: REAL LIFE UPDATE</div>
+        <div style="font-weight: bold; font-size: 24px;">GZA 1GB</div>
         <div id="hp-bar-container"><div id="hp-bar-fill"></div></div>
-        <div id="weapon-info">BEZBRONNY</div>
+        <div id="weapon-info">BROŃ: PIĘŚCI</div>
     </div>
 
-    <div id="mission-box"><b>CEL:</b> <span id="mission-text">Wejdź do czarnego wieżowca.</span></div>
-    <div id="speedometer">0 KM/H</div>
+    <div id="weapon-menu">
+        <div class="menu-container">
+            <div class="weapon-slot" onclick="selectWeapon('fists')">
+                <div style="font-size: 40px;">👊</div>
+                <div>Pięści</div>
+            </div>
+            <div id="gun-slot" class="weapon-slot locked" onclick="selectWeapon('gun')">
+                <div style="font-size: 40px;">🔫</div>
+                <div>Pistolet</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mission-box"><b>MISJA:</b> <br><span id="mission-text">Idź do bazy, by dostać sprzęt.</span></div>
     <div id="crosshair"></div>
-    <div id="interaction-prompt">Naciśnij [E] aby wsiąść</div>
+    <div id="interaction-prompt">NACIŚNIJ [E] ABY DOSIĄŚĆ ROWERU</div>
 
     <div id="instructions">
         <h1>GZA 1GB</h1>
         <p>KLIKNIJ, ABY ZACZĄĆ</p>
+        <p>TRZYMAJ [TAB] ABY ZMIENIĆ BROŃ</p>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -41,26 +70,24 @@
         let velocity = new THREE.Vector3(), direction = new THREE.Vector3();
         let prevTime = performance.now();
         let npcs = [];
-        let playerHP = 100, missionStep = 1, targetsKilled = 0;
-        let isOnBike = false, cameraMode = 0, hasGun = false;
+        let playerHP = 100, missionStep = 1, killedTargetsCount = 0;
+        let isOnBike = false, cameraMode = 0, hasGun = false, currentWeapon = 'fists';
+        let timeScale = 1;
 
         init();
         animate();
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x050005);
-            scene.fog = new THREE.Fog(0x050005, 0, 600);
-
+            scene.background = new THREE.Color(0x0a000a);
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-            const sun = new THREE.PointLight(0xff00ff, 2, 800);
-            sun.position.set(50, 100, 50);
+            const sun = new THREE.DirectionalLight(0xff00ff, 1);
+            sun.position.set(100, 200, 100);
             scene.add(sun);
 
             // Podłoga
@@ -68,61 +95,56 @@
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            // BUDYNEK Z WEJŚCIEM
-            const buildingGroup = new THREE.Group();
-            const wallMat = new THREE.MeshPhongMaterial({ color: 0x151515, side: THREE.DoubleSide });
-            // Ściany boczne i sufit
-            const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(2, 30, 40), wallMat); wallLeft.position.set(-20, 15, 0);
-            const wallRight = new THREE.Mesh(new THREE.BoxGeometry(2, 30, 40), wallMat); wallRight.position.set(20, 15, 0);
-            const wallBack = new THREE.Mesh(new THREE.BoxGeometry(40, 30, 2), wallMat); wallBack.position.set(0, 15, -20);
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(40, 2, 40), wallMat); roof.position.set(0, 30, 0);
-            // Front z dziurą (wejście)
-            const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(15, 30, 2), wallMat); frontLeft.position.set(-12.5, 15, 20);
-            const frontRight = new THREE.Mesh(new THREE.BoxGeometry(15, 30, 2), wallMat); frontRight.position.set(12.5, 15, 20);
-            const frontTop = new THREE.Mesh(new THREE.BoxGeometry(10, 15, 2), wallMat); frontTop.position.set(0, 22.5, 20);
-            
-            buildingGroup.add(wallLeft, wallRight, wallBack, roof, frontLeft, frontRight, frontTop);
-            buildingGroup.position.set(0, 0, -80);
-            scene.add(buildingGroup);
+            // Baza
+            const building = new THREE.Mesh(new THREE.BoxGeometry(40, 40, 40), new THREE.MeshPhongMaterial({ color: 0x151515 }));
+            building.position.set(0, 20, -100);
+            scene.add(building);
 
             // Gracz
             playerModel = new THREE.Group();
-            const pBody = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2, 0.5), new THREE.MeshPhongMaterial({color: 0xff00ff}));
-            playerModel.add(pBody);
+            playerModel.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 2, 0.5), new THREE.MeshPhongMaterial({color: 0xff00ff})));
             scene.add(playerModel);
 
-            // Pistolet (ukryty na start)
-            weapon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.7), new THREE.MeshPhongMaterial({color: 0x222222}));
-            weapon.position.set(0.4, -0.4, -0.6);
+            // Model Pistoletu
+            weapon = new THREE.Group();
+            weapon.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.6), new THREE.MeshPhongMaterial({color: 0x333333})));
+            weapon.position.set(0.3, -0.3, -0.7);
             weapon.visible = false;
             camera.add(weapon);
             scene.add(camera);
 
-            // Tłum NPC
-            for(let i=0; i<60; i++) createNPC((Math.random()-0.5)*800, (Math.random()-0.5)*800, false);
-            // Cele
-            createNPC(300, 300, true);
-            createNPC(310, 290, true);
+            // NPC i Cele
+            createNPC(400, 400, true);
+            createNPC(415, 385, true);
 
-            // Start gry
-            const inst = document.getElementById('instructions');
-            inst.addEventListener('click', () => { document.body.requestPointerLock(); inst.style.display = 'none'; });
-
+            // TAB Menu Logic
             document.addEventListener('keydown', (e) => {
+                if(e.code === 'Tab') {
+                    e.preventDefault();
+                    document.getElementById('weapon-menu').style.display = 'flex';
+                    document.exitPointerLock();
+                    timeScale = 0.2; // Bullet time
+                }
                 if(e.code === 'KeyW') moveForward = true;
                 if(e.code === 'KeyS') moveBackward = true;
                 if(e.code === 'KeyA') moveLeft = true;
                 if(e.code === 'KeyD') moveRight = true;
                 if(e.code === 'KeyV') cameraMode = (cameraMode + 1) % 4;
-                if(e.code === 'Space' && canJump) { velocity.y += 15; canJump = false; }
-                if(e.code === 'KeyE') handleInteraction();
+                if(e.code === 'KeyE') handleBikeSelection();
             });
+
             document.addEventListener('keyup', (e) => {
+                if(e.code === 'Tab') {
+                    document.getElementById('weapon-menu').style.display = 'none';
+                    document.body.requestPointerLock();
+                    timeScale = 1;
+                }
                 if(e.code === 'KeyW') moveForward = false;
                 if(e.code === 'KeyS') moveBackward = false;
                 if(e.code === 'KeyA') moveLeft = false;
                 if(e.code === 'KeyD') moveRight = false;
             });
+
             document.addEventListener('mousemove', (e) => {
                 if (document.pointerLockElement === document.body) {
                     playerModel.rotation.y -= e.movementX * 0.002;
@@ -132,43 +154,50 @@
             });
 
             window.addEventListener('mousedown', () => {
-                if (!hasGun || document.pointerLockElement !== document.body) return;
+                if (currentWeapon !== 'gun' || !hasGun || document.pointerLockElement !== document.body) return;
+                
+                weapon.position.z = -0.5;
+                setTimeout(() => weapon.position.z = -0.7, 50);
+
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera({x: 0, y: 0}, camera);
                 const intersects = raycaster.intersectObjects(npcs, true);
                 if (intersects.length > 0) {
-                    let target = intersects[0].object.parent;
-                    if (intersects[0].distance < 120) {
-                        target.userData.hp -= 50;
-                        target.userData.aggro = true;
-                        if(target.userData.hp <= 0 && target.userData.isTarget) targetsKilled++;
+                    let hit = intersects[0].object.parent;
+                    if (hit.userData.hp > 0) {
+                        hit.userData.hp -= 50;
+                        if (hit.userData.hp <= 0) {
+                            hit.rotation.z = Math.PI / 2;
+                            if (hit.userData.isTarget) killedTargetsCount++;
+                        }
                     }
                 }
             });
+
+            document.getElementById('instructions').onclick = () => {
+                document.body.requestPointerLock();
+                document.getElementById('instructions').style.display = 'none';
+            };
         }
 
-        function handleInteraction() {
-            if (missionStep === 2 && bike && playerModel.position.distanceTo(bike.position) < 5) {
-                isOnBike = !isOnBike;
-                if (isOnBike) {
-                    missionStep = 3;
-                    document.getElementById('mission-text').innerText = "Jedź do punktu (300, 300).";
-                }
-            }
+        function selectWeapon(type) {
+            if (type === 'gun' && !hasGun) return;
+            currentWeapon = type;
+            document.getElementById('weapon-info').innerText = "BROŃ: " + (type === 'gun' ? "PISTOLET" : "PIĘŚCI");
+            // Ukrywamy menu po kliknięciu
+            document.getElementById('weapon-menu').style.display = 'none';
+            document.body.requestPointerLock();
+            timeScale = 1;
         }
 
-        function spawnMissionItems() {
+        function spawnMissionAssets() {
             bike = new THREE.Group();
-            const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 1.8), new THREE.MeshPhongMaterial({color: 0xcccccc}));
-            const w1 = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 8, 24), new THREE.MeshPhongMaterial({color: 0x444444}));
-            w1.position.z = 0.8; w1.rotation.y = Math.PI/2;
-            const w2 = w1.clone(); w2.position.z = -0.8;
-            bike.add(frame, w1, w2);
-            bike.position.set(0, 0.5, -80);
+            bike.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 1.8), new THREE.MeshPhongMaterial({color: 0x555555})));
+            bike.position.set(0, 0.5, -100);
             scene.add(bike);
             
             hasGun = true;
-            document.getElementById('weapon-info').innerText = "PISTOLET";
+            document.getElementById('gun-slot').classList.remove('locked');
         }
 
         function createNPC(x, z, isTarget) {
@@ -181,82 +210,66 @@
             npcs.push(group);
         }
 
+        function handleBikeSelection() {
+            if (bike && playerModel.position.distanceTo(bike.position) < 6) {
+                isOnBike = !isOnBike;
+                if(isOnBike && missionStep === 2) {
+                    missionStep = 3;
+                    document.getElementById('mission-text').innerText = "Jedź do Złej Dzielnicy (400, 400).";
+                }
+            }
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
-            const delta = (time - prevTime) / 1000;
+            const delta = ((time - prevTime) / 1000) * timeScale;
 
-            // Logika Misji
-            const distToBase = playerModel.position.distanceTo(new THREE.Vector3(0, 0, -80));
-            if (missionStep === 1 && distToBase < 15) {
-                spawnMissionItems();
+            if (missionStep === 1 && playerModel.position.distanceTo(new THREE.Vector3(0, 0, -100)) < 15) {
+                spawnMissionAssets();
                 missionStep = 2;
-                document.getElementById('mission-text').innerText = "Zabierz rower [E] i broń.";
-            }
-            
-            if (missionStep === 2 && bike && playerModel.position.distanceTo(bike.position) < 5) {
-                document.getElementById('interaction-prompt').style.display = 'block';
-            } else {
-                document.getElementById('interaction-prompt').style.display = 'none';
+                document.getElementById('mission-text').innerText = "Wybierz pistolet [TAB] i wsiądź na rower [E].";
             }
 
+            if (missionStep === 3 && playerModel.position.distanceTo(new THREE.Vector3(400, 0, 400)) < 60) missionStep = 4;
             if (missionStep === 4) {
-                document.getElementById('mission-text').innerText = "Zabij cele: " + targetsKilled + "/2";
-                if(targetsKilled >= 2) document.getElementById('mission-text').innerText = "MISJA WYKONANA!";
-            } else if (missionStep === 3 && playerModel.position.distanceTo(new THREE.Vector3(300, 0, 300)) < 60) {
-                missionStep = 4;
+                document.getElementById('mission-text').innerText = "Zabij cele: " + killedTargetsCount + "/2";
+                if(killedTargetsCount >= 2) document.getElementById('mission-text').innerText = "MISJA WYKONANA!";
             }
 
-            // Ruch
-            let speedLimit = isOnBike ? 950 : 400;
+            let moveSpeed = isOnBike ? 1000 : 400;
             velocity.y -= 9.8 * 4.0 * delta;
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
-
             direction.z = Number(moveForward) - Number(moveBackward);
             direction.x = Number(moveRight) - Number(moveLeft);
             direction.normalize();
 
-            if (moveForward || moveBackward) velocity.z -= direction.z * speedLimit * delta;
-            if (moveLeft || moveRight) velocity.x -= direction.x * speedLimit * delta;
+            if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
 
-            const moveVec = new THREE.Vector3(-velocity.x * delta, 0, velocity.z * delta).applyQuaternion(playerModel.quaternion);
-            playerModel.position.add(moveVec);
+            playerModel.position.add(new THREE.Vector3(-velocity.x * delta, 0, velocity.z * delta).applyQuaternion(playerModel.quaternion));
             playerModel.position.y += velocity.y * delta;
-
             if (playerModel.position.y < 1.1) { velocity.y = 0; playerModel.position.y = 1.1; canJump = true; }
-
-            document.getElementById('speedometer').innerText = Math.round(Math.abs(velocity.z/10)) + " KM/H";
 
             if(isOnBike) { bike.position.copy(playerModel.position); bike.rotation.y = playerModel.rotation.y; }
 
-            // Kamera i Widoczność
+            // Camera / Weapon Visibility
             if (cameraMode === 0) {
                 camera.position.copy(playerModel.position).y += 0.8;
                 camera.rotation.y = playerModel.rotation.y;
                 playerModel.visible = false;
-                weapon.visible = hasGun; 
-                document.getElementById('crosshair').style.display = hasGun ? 'block' : 'none';
+                weapon.visible = (hasGun && currentWeapon === 'gun');
+                document.getElementById('crosshair').style.display = weapon.visible ? 'block' : 'none';
             } else {
-                playerModel.visible = true; weapon.visible = false; document.getElementById('crosshair').style.display = 'none';
-                if (cameraMode === 1) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 3, 8).applyQuaternion(playerModel.quaternion));
-                else if (cameraMode === 2) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 18, 5).applyQuaternion(playerModel.quaternion));
-                else if (cameraMode === 3) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 1.5, -8).applyQuaternion(playerModel.quaternion));
+                playerModel.visible = true; weapon.visible = false;
+                document.getElementById('crosshair').style.display = 'none';
+                if (cameraMode === 1) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 3, 9).applyQuaternion(playerModel.quaternion));
+                else if (cameraMode === 2) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 20, 5).applyQuaternion(playerModel.quaternion));
+                else if (cameraMode === 3) camera.position.copy(playerModel.position).add(new THREE.Vector3(0, 1.5, -9).applyQuaternion(playerModel.quaternion));
                 camera.lookAt(playerModel.position.x, playerModel.position.y + 0.5, playerModel.position.z);
             }
 
-            npcs.forEach(npc => {
-                if (npc.userData.hp > 0 && npc.userData.aggro) {
-                    npc.lookAt(playerModel.position.x, 1.1, playerModel.position.z);
-                    if (time - npc.userData.lastShot > 1600 && playerModel.position.distanceTo(npc.position) < 40) {
-                        playerHP -= 7;
-                        document.getElementById('hp-bar-fill').style.width = playerHP + "%";
-                        npc.userData.lastShot = time;
-                    }
-                }
-            });
-
-            if(playerHP <= 0) location.reload();
             prevTime = time;
             renderer.render(scene, camera);
         }
